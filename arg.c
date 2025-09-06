@@ -22,11 +22,11 @@
 #include "cache.h"
 
 
-#define BTOCSTR(bstr)	((UBYTE *)((UBYTE *)(BADDR(bstr)) + 1))
+#define BTOCSTR(bstr)	((char *)((UBYTE *)(BADDR(bstr)) + 1))
 char conv_name[40];				/* Used for BCPL to C name conversion		*/
 
 
-UBYTE *ver = "\0$VER: HyperCache version 1.0";
+char *ver = "\0$VER: HyperCache version 1.0";
 
 ULONG bit_table[16] = { 1, 		2, 		4, 		8,	 	
 							   16, 		32,   	64,  		128,  	
@@ -39,8 +39,8 @@ ULONG sectorsize	= DEFLT_ITEM_SIZE;
 ULONG linesize		= DEFLT_LINE_SIZE;
 ULONG sets			= DEFLT_SETS;	
 ULONG lines			= DEFLT_LINES;
-UBYTE *volume 		= NULL;
-UBYTE *device 		= NULL;
+char *volume 		= NULL;
+char *device 		= NULL;
 ULONG	unit     	= 0;
 BOOL	killcache	= FALSE;
 BOOL  cacheinfo   = FALSE;
@@ -251,5 +251,5 @@ ULONG a;
 		bprintf("Unit     : %d\n", unit);
 	}
 
-	return NULL;
+	return (ULONG)NULL;
 }

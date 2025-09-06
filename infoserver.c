@@ -6,15 +6,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <proto/exec.h>
+#include <clib/alib_protos.h>
 #include "cache.h"
 
-IMPORT reads;
-IMPORT readhits;
-IMPORT writes;
-IMPORT sectorsize;
-IMPORT linesize;
-IMPORT sets;
-IMPORT lines;
+extern ULONG reads;
+extern ULONG readhits;
+extern ULONG writes;
+extern ULONG sectorsize;
+extern ULONG linesize;
+extern ULONG sets;
+extern ULONG lines;
 
 int DiskInDrive(void);
 
@@ -27,7 +28,7 @@ extern struct cache_line *cache;
 
 void InfoServer(struct MsgPort *infoport)
 {
-BOOL 				    ABORT = NULL;		/* Flag: time to terminate						*/
+BOOL 				    ABORT = FALSE;		/* Flag: time to terminate						*/
 ULONG				    signal;
 struct INFOMessage *msg;
 struct timerequest *TimerIO;
@@ -40,7 +41,7 @@ struct MsgPort     *timeport;
 	if (!(TimerIO = (struct timerequest *) CreateExtIO(timeport, sizeof(struct timerequest))))
 		Cleanexit("Couln't set up timer request");
 
-	if (OpenDevice( TIMERNAME, UNIT_VBLANK, (struct IORequest *) TimerIO, 0L))
+	if (OpenDevice( (CONST_STRPTR)TIMERNAME, UNIT_VBLANK, (struct IORequest *) TimerIO, 0L))
 		Cleanexit("Couldn't open timer device");
 
 	timepending = 0;
@@ -76,7 +77,7 @@ struct MsgPort     *timeport;
 		}
 
 		if (signal & PORTSIG) {               /* got a signal at the msgport 	*/
-			while (msg = (struct INFOMessage *)GetMsg((struct MsgPort *)infoport)) {
+			while ((msg = (struct INFOMessage *)GetMsg((struct MsgPort *)infoport))) {
 
 				/* Handle command sent to info port */
 
@@ -97,7 +98,7 @@ struct MsgPort     *timeport;
 		}
 
 		if (signal & USERSIG) {	
-			while (msg = (struct INFOMessage *)GetMsg((struct MsgPort *)infoport))
+			while ((msg = (struct INFOMessage *)GetMsg((struct MsgPort *)infoport)))
 				; 	/* Clean up any other pending messages */
          ABORT = TRUE;
 		}
