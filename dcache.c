@@ -11,7 +11,22 @@
 #include <libraries/dos.h>
 #include <proto/dos.h>
 #include <proto/exec.h>
+#include <clib/alib_protos.h>
 
+#define DEV_BEGINIO (-30)
+#define DEV_ABORTIO (-36)
+
+#define DISK_IN		0
+#define DISK_OUT	1
+
+#include <devices/trackdisk.h>
+
+extern BPTR _Backstdout;
+extern BOOL cli;
+extern ULONG reads, readhits, writes;
+void bprintf(char *format,...);
+void Cleanexit(char *errormsg);
+int DiskInDrive(void);
 
 /* NOTE: This code is designed to support multi-threaded execution, but needs
 **       to contain these global variables so that the detached code segment
@@ -46,12 +61,12 @@ ULONG allocnum 	= 0;
 ULONG reads 		= 0;
 ULONG readhits 	= 0;
 ULONG writes 		= 0;
-ULONG sectorsize;
+extern ULONG sectorsize;
 
-IMPORT ULONG linesize;			/* from arg.c */
-IMPORT ULONG sets;
-IMPORT ULONG lines;
-IMPORT UBYTE *device;
+extern ULONG linesize;			/* from arg.c */
+extern ULONG sets;
+extern ULONG lines;
+extern char *device;
 IMPORT int   unit;
 
 /*
@@ -94,8 +109,7 @@ char __chip globbuffer[LINE_SIZE << 9] ;
 	Prototypes
 */
 
-void (*__asm oldbeginio)(register __a1 struct IOStdReq *,
-								 register __a6 struct Device *dev);
+void (*oldbeginio)(struct IOStdReq *req asm("a1"), struct Device *dev asm("a6"));
 void 	Cleanup				(void);
 void	InfoServer			(void);
 void 	Cleanexit			(char *errormsg);
@@ -229,7 +243,7 @@ int  set;
 
    ObtainSemaphore(ss);
 
-   port = CreatePort(NULL, NULL) ;
+   port = CreatePort(NULL, (ULONG)NULL) ;
 
    if (!port) {
       ReleaseSemaphore(ss) ;
@@ -247,7 +261,7 @@ int  set;
    IO->io_Data = (APTR) globbuffer ;
 
    oldbeginio(IO,IO->io_Device) ;
-   WaitIO(IO) ;
+   WaitIO((struct IORequest *)IO) ;
 
    DeletePort(port) ;
 
@@ -280,7 +294,7 @@ int set ;
    ObtainSemaphore(ss);
    s.sector = linestart ;
 
-   port = CreatePort(NULL, NULL) ;
+   port = CreatePort(NULL, (ULONG)NULL) ;
 
    if (!port) {
       ReleaseSemaphore(ss) ;
@@ -299,7 +313,7 @@ int set ;
    IO->io_Data = (APTR) buffer ;
 
    oldbeginio(IO,IO->io_Device) ;
-   WaitIO(IO) ;
+   WaitIO((struct IORequest *)IO) ;
 
    DeletePort(port) ;
 
@@ -387,8 +401,8 @@ int set ;
    return 0 ;
 }
 
-void __saveds __asm mybeginio(register __a1 struct IOStdReq *req,
-                              register __a6 struct Device *dev)
+void mybeginio(struct IOStdReq *req asm("a1"),
+                              struct Device *dev asm("a6"))
 {
 union sector s;
 int   set;
@@ -548,7 +562,7 @@ char portname[40];
 	puts(portname);
 	fflush(stdout);
 
-	if (FindPort(portname)) {
+	if (FindPort((CONST_STRPTR)portname)) {
 		fprintf(stderr, "HyperCache is already active on this device.\n");
 		return -1;
 	}
@@ -561,13 +575,13 @@ char portname[40];
 		return -1;
 	}
 
-	if (!(devport = CreatePort(portname, 0)))
+	if (!(devport = CreatePort((CONST_STRPTR)portname, 0)))
 		Cleanexit("An error occurred creating the message port");
 
 	if (!(IO = CreateStdIO(devport)))
 		Cleanexit("An error occurred creating the IO request");
 
-	if (OpenDevice(device, unit, (struct IORequest *)IO, 0))
+	if (OpenDevice((CONST_STRPTR)device, unit, (struct IORequest *)IO, 0))
 		Cleanexit("An error occurred opening the device");
 	else
 		devopen = 1;
@@ -579,15 +593,15 @@ char portname[40];
 
    InitSemaphore(ss) ;
 
-   oldbeginio = SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)mybeginio) ;
+   oldbeginio = (void (*)(struct IOStdReq *, struct Device *))SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(APTR)mybeginio) ;
 
 	Wait (SIGBREAKF_CTRL_F) ;	/* InfoServer(); */
 
    ObtainSemaphore(ss) ;
-   SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)oldbeginio) ;
+   SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(APTR)oldbeginio) ;
    ReleaseSemaphore(ss) ;
 
-	printf("Stats:  Reads-> %d  Readhits-> %d\n", reads, readhits);
+	printf("Stats:  Reads-> %ld  Readhits-> %ld\n", reads, readhits);
 
 	Cleanup();
    return 0 ;
@@ -626,7 +640,7 @@ int line, set;
 		FreeMem(cache, (lines+1) * (sets+1) * sizeof(struct cache_line));
 
    if (allocnum)
-      printf("Allocation mismatch. %d buffers left lying around\n",allocnum) ;
+      printf("Allocation mismatch. %ld buffers left lying around\n",allocnum) ;
 
    if (ss)
       FreeMem(ss,sizeof(struct SignalSemaphore)) ;
@@ -638,4 +652,28 @@ int line, set;
       DeleteStdIO(IO) ;
    if (devport)
       DeletePort(devport) ;
+}
+
+int DiskInDrive(void)
+{
+struct MsgPort     *port;
+int status;
+
+	ObtainSemaphore(ss);
+
+	port = CreatePort(NULL, (ULONG)NULL) ;
+	if (!port) {
+		ReleaseSemaphore(ss) ;
+		return DISK_OUT ;				/* Can't check... assume still in */
+	}
+
+   IO->io_Message.mn_ReplyPort = port ;
+   IO->io_Command = TD_CHANGESTATE;
+   oldbeginio(IO,IO->io_Device) ;
+	WaitIO((struct IORequest *)IO) ;
+	status = IO->io_Actual;
+	DeletePort(port) ;
+	ReleaseSemaphore(ss);
+
+	return status;
 }

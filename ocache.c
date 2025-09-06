@@ -20,9 +20,60 @@
 #include <libraries/dos.h>
 #include <proto/dos.h>
 #include <proto/exec.h>
-#include "cache.h"
+#include <clib/alib_protos.h>
+#include <devices/trackdisk.h>
 
-int 							 devopen = NULL;	/* Flag: has the device been opened */
+#define DEV_BEGINIO (-30)
+#define DEV_ABORTIO (-36)
+#define DISK_IN		0
+#define DISK_OUT	1
+#define ITEM_SIZE 512
+
+extern BPTR _Backstdout;
+extern BOOL cli;
+extern ULONG reads, readhits, writes;
+extern ULONG sectorsize, linesize, sets, lines;
+extern char *device;
+extern int unit;
+void bprintf(char *format,...);
+void Cleanexit(char *errormsg);
+int DiskInDrive(void);
+int parse_args(int argc, char *argv[]);
+void InfoServer(struct MsgPort *infoport);
+void Cleanup(void);
+
+struct INFOMessage {
+	struct Message INFO_Msg;
+	int INFO_Command;
+	ULONG INFO_Reads;
+	ULONG INFO_Readhits;
+	ULONG INFO_Writes;
+	ULONG INFO_Sectorsize;
+	ULONG INFO_Linesize;
+	ULONG INFO_Sets;
+	ULONG INFO_Lines;
+};
+
+#define INFO_KILL 1
+#define INFO_STATS 2
+
+union sector {
+	ULONG sector;
+	struct {
+		unsigned offset : 9;
+		unsigned line : 5;
+		unsigned key : 18;
+	} s;
+};
+
+struct cache_line {
+   int  key;                     /* Item key 								*/
+   int  age;                     /* AGE for LRU alg 						*/
+   int  valid;							/* 1=buffer valid, 0=not				*/
+   char *buffer;                	/* [LINE_SIZE][ITEM_SIZE] of DATA 	*/
+};
+
+BOOL 							 devopen = FALSE;	/* Flag: has the device been opened */
 struct MsgPort  			*devport = NULL;	/* Device's message port				*/
 struct MsgPort 			*infoport= NULL;	/* The info server port					*/
 struct IOStdReq 			*IO		= NULL;	/* All IO goes through here now. 	*/
@@ -31,38 +82,23 @@ struct SignalSemaphore 	*ss		= NULL;	/* To force single threading	 		*/
 														/* for updating the cache	 			*/
 
 														/* Pointer to the old vector			*/
-void (*__asm oldbeginio)(register __a1 struct IOStdReq *,
-								 register __a6 struct Device *dev);
+void (*oldbeginio)(struct IOStdReq *req asm("a1"), struct Device *dev asm("a6"));
 
-
-void CopyMemQuick(char *, char *, long);
+struct cache_line *cache = NULL;
+char *globbuffer = NULL;
 
 ULONG counter;
 ULONG allocnum 	= 0;
 ULONG reads 		= 0;
 ULONG readhits 	= 0;
 ULONG writes 		= 0;
-ULONG sectorsize;
 
-IMPORT ULONG linesize;			/* from arg.c */
-IMPORT ULONG sets;
-IMPORT ULONG lines;
-IMPORT UBYTE *device;
-IMPORT int   unit;
-IMPORT BOOL  killcache;
-
-IMPORT ULONG sectormask;
-IMPORT ULONG linemask;
-
-IMPORT BOOL  cli;
-IMPORT ULONG _Backstdout;
-
-struct cache_line *cache = NULL;
+extern BOOL killcache, cacheinfo;
+extern ULONG sectormask, linemask;
 
 /*
  * A buffer for scsidisk.device to go through.
  */
-char __chip *globbuffer = NULL;
 
 /*
  * This functions checks the cache. If the sector is there, it returns
@@ -160,7 +196,7 @@ int age ;
     * If no buffer, allocate one.
     */
    if (! cache[set * lines + s->s.line].buffer )
-      if (cache[set * lines + s->s.line].buffer = AllocMem(linesize * ITEM_SIZE, MEMF_PUBLIC))
+      if ((cache[set * lines + s->s.line].buffer = AllocMem(linesize * ITEM_SIZE, MEMF_PUBLIC)))
 			allocnum++;
 
    /*
@@ -191,7 +227,7 @@ int  set;
 
    ObtainSemaphore(ss);
 
-   port = CreatePort(NULL, NULL) ;
+   port = CreatePort(NULL, (ULONG)NULL) ;
 
    if (!port) {
       ReleaseSemaphore(ss) ;
@@ -209,7 +245,7 @@ int  set;
    IO->io_Data = (APTR) globbuffer ;
 
    oldbeginio(IO,IO->io_Device) ;
-   WaitIO(IO) ;
+   WaitIO((struct IORequest *)IO) ;
 
    DeletePort(port) ;
 
@@ -242,7 +278,7 @@ int set ;
    ObtainSemaphore(ss);
    s.sector = linestart ;
 
-   port = CreatePort(NULL, NULL) ;
+   port = CreatePort(NULL, (ULONG)NULL) ;
 
    if (!port) {
       ReleaseSemaphore(ss) ;
@@ -261,7 +297,7 @@ int set ;
    IO->io_Data = (APTR) buffer ;
 
    oldbeginio(IO,IO->io_Device) ;
-   WaitIO(IO) ;
+   WaitIO((struct IORequest *)IO) ;
 
    DeletePort(port) ;
 
@@ -339,8 +375,8 @@ int set ;
    return 0 ;
 }
 
-void __saveds __asm mybeginio(register __a1 struct IOStdReq *req,
-                              register __a6 struct Device *dev)
+void mybeginio(struct IOStdReq *req asm("a1"),
+                              struct Device *dev asm("a6"))
 {
 union sector s;
 int   set;
@@ -524,10 +560,10 @@ char programname[40];
 	
 	if (killcache)	{							/* Remove the cache and exit	*/
 		struct MsgPort *port_to_kill;	
-		if (port_to_kill = FindPort(infoportname)) {
+		if ((port_to_kill = FindPort((CONST_STRPTR)infoportname))) {
 			struct MsgPort *replyport;
 
-			if (!(replyport = CreatePort(NULL, NULL)))
+			if (!(replyport = CreatePort(NULL, (ULONG)NULL)))
 				Cleanexit("Error creating temporary port");
 			else {
 				struct INFOMessage msg;
@@ -551,19 +587,19 @@ char programname[40];
 	if (!(globbuffer = AllocMem(linesize * ITEM_SIZE, MEMF_PUBLIC | MEMF_CLEAR)))
 		Cleanexit("Error allocating memory for global buffer.");
 
-	if (FindPort(portname))
+	if (FindPort((CONST_STRPTR)portname))
 		Cleanexit("HyperCache is already active on this device.");
 
-	if (!(devport = CreatePort(portname, 0)))
+	if (!(devport = CreatePort((CONST_STRPTR)portname, 0)))
 		Cleanexit("An error occurred creating the message port");
 
-	if (!(infoport = CreatePort(infoportname, 0)))
+	if (!(infoport = CreatePort((CONST_STRPTR)infoportname, 0)))
 		Cleanexit("An error occurred creating the info port");
 
 	if (!(IO = CreateStdIO(devport)))
 		Cleanexit("An error occurred creating the IO request");
 
-	if (OpenDevice(device, unit, (struct IORequest *)IO, 0))
+	if (OpenDevice((CONST_STRPTR)device, unit, (struct IORequest *)IO, 0))
 		Cleanexit("An error occurred opening the device");
 	else
 		devopen = 1;
@@ -575,13 +611,13 @@ char programname[40];
 
    InitSemaphore(ss) ;
 
-   oldbeginio = SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)mybeginio) ;
+   oldbeginio = (void (*)(struct IOStdReq *, struct Device *))SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(APTR)mybeginio) ;
 
 	bprintf("[Cache installed successfully]\n");
 	InfoServer(infoport);
 
    ObtainSemaphore(ss) ;
-   SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)oldbeginio) ;
+   SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(APTR)oldbeginio) ;
    ReleaseSemaphore(ss) ;
 
 	Cleanup();
@@ -646,4 +682,28 @@ int line, set;
 		FreeMem(cache, sizeof(struct cache_line) * sets * lines);
    if (_Backstdout)
 		Close(_Backstdout);
+}
+
+int DiskInDrive(void)
+{
+struct MsgPort     *port;
+int status;
+
+	ObtainSemaphore(ss);
+
+	port = CreatePort(NULL, (ULONG)NULL) ;
+	if (!port) {
+		ReleaseSemaphore(ss) ;
+		return DISK_OUT ;				/* Can't check... assume still in */
+	}
+
+   IO->io_Message.mn_ReplyPort = port ;
+   IO->io_Command = TD_CHANGESTATE;
+   oldbeginio(IO,IO->io_Device) ;
+	WaitIO((struct IORequest *)IO) ;
+	status = IO->io_Actual;
+	DeletePort(port) ;
+	ReleaseSemaphore(ss);
+
+	return status;
 }
