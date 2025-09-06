@@ -15,11 +15,11 @@
 
 /* NOTE: This code is designed to support multi-threaded execution, but needs
 **       to contain these global variables so that the detached code segment
-**       that replaces the exec beginio() vector can access the device 
+**       that replaces the exec beginio() vector can access the device
 **       structure that was originally opened.  In order for the executable
-**       to remain pure, it must be linked with cres.o 
+**       to remain pure, it must be linked with cres.o
 **
-**       A semaphore system is used to make sure that that the critical 
+**       A semaphore system is used to make sure that that the critical
 **       sections are single-threaded on writes.  Since one task can be
 **       writing to the device (the cache) and several can be reading,
 **       the write task must perform the action as an atomic operation.
@@ -115,11 +115,11 @@ void	usage					(void);
 
 #define cache_member(set, line) cache[ (set) * lines + (line) ]
 
-int FindEntry(union sector *s) 
+int FindEntry(union sector *s)
 {
 int set;
 
-   for (set = 0; set < SETS; set++) 
+   for (set = 0; set < SETS; set++)
       if (cache_member(set, s->s.line).valid) {
          if (cache_member(set, s->s.line).key == s->s.key) {
             cache_member(set, s->s.line).age = counter ++ ;
@@ -139,7 +139,7 @@ int set;
  * can't fill it, remember to clear it!
  */
 
-int AllocCache(union sector *s) 
+int AllocCache(union sector *s)
 {
 int set ;
 int oldest ;
@@ -151,21 +151,21 @@ int age ;
    oldest = 0 ;
    found  = 0 ;
 
-   for (set = 0; set < SETS; set++) 
+   for (set = 0; set < SETS; set++)
       if (cache_member(set, s->s.line).valid) {
          if (cache_member(set, s->s.line).key != s->s.key) {
             /*
-             * This 'age' calculation is complicated since normally, 
+             * This 'age' calculation is complicated since normally,
              * AGE = COUNTER - CACHE.AGE, however, if counter has
              * wrapped to zero, such evaluation evaluates ages of < 0 and
              * these entries will never be reselected for reuse.
              *
              * If counter wraps to zero, then CACHE.AGE is generally larger
-             * than COUNTER, so we evaluate age as the total of MAXINT-AGE 
+             * than COUNTER, so we evaluate age as the total of MAXINT-AGE
              * plus the current value of the counter. IE, how much it took to
              * wrap and reach the current position.
              *
-             * Hence, 
+             * Hence,
              * AGE = ~0 - CACHE.AGE + COUNTER
              */
             age = cache_member(set, s->s.line).age ;
@@ -221,7 +221,7 @@ int age ;
  * Allocate a line of cache and read it from disk.
  */
 
-int ReadCache(union sector *s) 
+int ReadCache(union sector *s)
 {
 struct MsgPort *port;
 char *dest;
@@ -271,7 +271,7 @@ int  set;
    return 0 ;
    }
 
-int ReadBufferToCache(int linestart,int unread,char *buffer) 
+int ReadBufferToCache(int linestart,int unread,char *buffer)
 {
 union sector s ;
 struct MsgPort *port ;
@@ -327,12 +327,12 @@ int set ;
    return 0 ;
 }
 
-/* 
+/*
  * This functions checks the cache. If the sector is there, it returns
  * the buffer, otherwise it returns NULL.
  */
 
-char *FindCache(union sector *s,int set) 
+char *FindCache(union sector *s,int set)
 {
    return & (cache_member(set, s->s.line).buffer[s->s.offset << 9 ] ) ;
 }
@@ -342,7 +342,7 @@ char *FindCache(union sector *s,int set)
  * is in the cache.
  */
 
-int NextEntry(union sector *s, int set) 
+int NextEntry(union sector *s, int set)
 {
 int line ;
 
@@ -360,12 +360,12 @@ int line ;
  * Search for sector, and mark it invalid.
  */
 
-void ClearEntry(union sector *s,int set) 
+void ClearEntry(union sector *s,int set)
 {
    cache_member(set, s->s.line).valid = 0 ;
 }
 
-int CacheUpdate(union sector *s, int seccount, char *buffer) 
+int CacheUpdate(union sector *s, int seccount, char *buffer)
 {
 int set ;
 
@@ -388,7 +388,7 @@ int set ;
 }
 
 void __saveds __asm mybeginio(register __a1 struct IOStdReq *req,
-                              register __a6 struct Device *dev) 
+                              register __a6 struct Device *dev)
 {
 union sector s;
 int   set;
@@ -425,7 +425,7 @@ int   linestart;
 	            source = FindCache(&s,set) ;
 	            }
 
-				if (source) 
+				if (source)
 					readhits++;
 	
 	         /*
@@ -470,7 +470,7 @@ int   linestart;
 	             */
 	            unread = 0 ;
 	
-	            linestart = s.sector ; 
+	            linestart = s.sector ;
 	
 	            /*
 	             * Scan counting sectors that need reading.
@@ -531,7 +531,7 @@ int   linestart;
 	}
 }
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[])
 {
 char portname[40];
 
@@ -575,7 +575,7 @@ char portname[40];
 	if (!(ss = AllocMem(sizeof(struct SignalSemaphore), MEMF_PUBLIC | MEMF_CLEAR)))
 		Cleanexit("An error occurred allocating semaphore memory");
 
-   SumLibrary( (struct Library *) IO->io_Device) ; 
+   SumLibrary( (struct Library *) IO->io_Device) ;
 
    InitSemaphore(ss) ;
 
@@ -600,7 +600,7 @@ char portname[40];
 
 void Cleanexit(char *errormsg)
 {
-	if (errormsg) 
+	if (errormsg)
 		fputs(errormsg, stderr);
 
 	Cleanup();
@@ -608,7 +608,7 @@ void Cleanexit(char *errormsg)
 }
 
 /*
-	Clean up global allocations 
+	Clean up global allocations
 */
 
 void Cleanup(void)

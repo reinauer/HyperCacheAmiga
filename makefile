@@ -1,15 +1,20 @@
-CFLAGS=-cfist -v -y -O
-STARTUP=lib:cback.o
-LFLAGS=sc sd nd verbose define __main=__tinymain
-LIBS=lib lib:lc.lib lib:amiga.lib lib:debug.lib 
+#LFLAGS=sc sd nd verbose define __main=__tinymain
+
+CC   := m68k-amigaos-gcc
+VASM := vasmm68k_mot
+LDFLAGS :=-mcrt=clib2 -lgcc -lc -lamiga 
+
 MAIN=cache
 OBJECTS=cache.o infoserver.o arg.o backio.o 
 
 cache: $(OBJECTS)
-	BLINK from $(STARTUP) $(OBJECTS) to $(MAIN) $(LFLAGS) $(LIBS)
+	$(CC) -o $(MAIN) $(OBJECTS) $(LDFLAGS)
 
 .c.o:	
-	cc $(CFLAGS) $*
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 .asm.o:
-	dh2:a68k/a68k $*
+	$(VASM) -quiet -m68020 -Fhunk -o $@ $<
+
+clean:
+	rm -f $(OBJECTS) $(MAIN)

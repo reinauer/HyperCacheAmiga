@@ -6,7 +6,7 @@
 #include <proto/dos.h>
 #include "cache.h"
 
-IMPORT ULONG _Backstdout;
+BPTR _Backstdout;
 ULONG			 _BackGroundIO = TRUE;
 BOOL			  cli;
 

@@ -30,7 +30,7 @@ struct SignalSemaphore 	*ss		= NULL;	/* To force single threading	 		*/
 														/* through the code responsible	 	*/
 														/* for updating the cache	 			*/
 
-														/* Pointer to the old vector			*/  
+														/* Pointer to the old vector			*/
 void (*__asm oldbeginio)(register __a1 struct IOStdReq *,
 								 register __a6 struct Device *dev);
 
@@ -64,11 +64,11 @@ struct cache_line *cache = NULL;
  */
 char __chip *globbuffer = NULL;
 
-/* 
+/*
  * This functions checks the cache. If the sector is there, it returns
  * the buffer, otherwise it returns NULL.
  */
-char *FindCache(union sector *s,int set) 
+char *FindCache(union sector *s,int set)
 {
    return & (cache[set * lines + s->s.line].buffer[s->s.offset * ITEM_SIZE ] ) ;
 }
@@ -76,11 +76,11 @@ char *FindCache(union sector *s,int set)
 /*
  * Scan for sector, and return the set it resides in.
  */
-int FindEntry(union sector *s) 
+int FindEntry(union sector *s)
 {
 int set;
 
-   for (set = 0; set < sets; set++) 
+   for (set = 0; set < sets; set++)
       if (cache[set * lines + s->s.line].valid) {
          if (cache[set * lines + s->s.line].key == s->s.key) {
             cache[set * lines + s->s.line].age = counter ++ ;
@@ -100,7 +100,7 @@ int set;
  * can't fill it, remember to clear it!
  */
 
-int AllocCache(union sector *s) 
+int AllocCache(union sector *s)
 {
 int set ;
 int oldest ;
@@ -112,21 +112,21 @@ int age ;
    oldest = 0 ;
    found  = 0 ;
 
-   for (set = 0; set < sets; set++) 
+   for (set = 0; set < sets; set++)
       if (cache[set * lines + s->s.line].valid) {
          if (cache[set * lines + s->s.line].key != s->s.key) {
             /*
-             * This 'age' calculation is complicated since normally, 
+             * This 'age' calculation is complicated since normally,
              * AGE = COUNTER - CACHE.AGE, however, if counter has
              * wrapped to zero, such evaluation evaluates ages of < 0 and
              * these entries will never be reselected for reuse.
              *
              * If counter wraps to zero, then CACHE.AGE is generally larger
-             * than COUNTER, so we evaluate age as the total of MAXINT-AGE 
+             * than COUNTER, so we evaluate age as the total of MAXINT-AGE
              * plus the current value of the counter. IE, how much it took to
              * wrap and reach the current position.
              *
-             * Hence, 
+             * Hence,
              * AGE = ~0 - CACHE.AGE + COUNTER
              */
             age = cache[set * lines + s->s.line].age ;
@@ -183,7 +183,7 @@ int age ;
  * Allocate a line of cache and read it from disk.
  */
 
-int ReadCache(union sector *s) 
+int ReadCache(union sector *s)
 {
 struct MsgPort *port;
 char *dest;
@@ -233,7 +233,7 @@ int  set;
    return 0 ;
    }
 
-int ReadBufferToCache(int linestart,int unread,char *buffer) 
+int ReadBufferToCache(int linestart,int unread,char *buffer)
 {
 union sector s ;
 struct MsgPort *port ;
@@ -294,7 +294,7 @@ int set ;
  * is in the cache.
  */
 
-int NextEntry(union sector *s, int set) 
+int NextEntry(union sector *s, int set)
 {
 int line ;
 
@@ -312,12 +312,12 @@ int line ;
  * Search for sector, and mark it invalid.
  */
 
-void ClearEntry(union sector *s,int set) 
+void ClearEntry(union sector *s,int set)
 {
    cache[set * lines + s->s.line].valid = 0 ;
 }
 
-int CacheUpdate(union sector *s, int seccount, char *buffer) 
+int CacheUpdate(union sector *s, int seccount, char *buffer)
 {
 int set ;
 
@@ -340,7 +340,7 @@ int set ;
 }
 
 void __saveds __asm mybeginio(register __a1 struct IOStdReq *req,
-                              register __a6 struct Device *dev) 
+                              register __a6 struct Device *dev)
 {
 union sector s;
 int   set;
@@ -377,7 +377,7 @@ int   linestart;
 	            source = FindCache(&s,set) ;
 	            }
 
-				if (source) 
+				if (source)
 					readhits++;
 	
 	         /*
@@ -422,7 +422,7 @@ int   linestart;
 	             */
 	            unread = 0 ;
 	
-	            linestart = s.sector ; 
+	            linestart = s.sector ;
 	
 	            /*
 	             * Scan counting sectors that need reading.
@@ -488,7 +488,7 @@ int   linestart;
 ** unit it builds two message port names, one for the device control and
 ** one for the local info server.  If the user has specified the quit
 ** flag on the command line, a message with the INFO_KILL command is sent
-** to the info server and then the code is exited.  
+** to the info server and then the code is exited.
 **
 ** If this is not the kill request, but rather the actual invocation of the
 ** cache, the two ports are created.  If the device port already exists,
@@ -499,7 +499,7 @@ int   linestart;
 ** wait for commands, such as KILL or STATS, and services those requests.
 */
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[])
 {
 char portname[40];
 char infoportname[40];
@@ -507,7 +507,7 @@ char programname[40];
 
 	cli = (argc != 0);
 
-	if (cli) 
+	if (cli)
 		if (parse_args(argc, argv))
 			Cleanexit(NULL);
 
@@ -541,7 +541,7 @@ char programname[40];
 				DeletePort(replyport);		/* Remove the reply port		*/
 				Cleanexit(NULL);				/* Exit this thread				*/
 			}
-		} else 
+		} else
 			Cleanexit("Problem: Can't find that cache's info port!");
 	}
 
@@ -551,7 +551,7 @@ char programname[40];
 	if (!(globbuffer = AllocMem(linesize * ITEM_SIZE, MEMF_PUBLIC | MEMF_CLEAR)))
 		Cleanexit("Error allocating memory for global buffer.");
 
-	if (FindPort(portname)) 
+	if (FindPort(portname))
 		Cleanexit("HyperCache is already active on this device.");
 
 	if (!(devport = CreatePort(portname, 0)))
@@ -571,14 +571,14 @@ char programname[40];
 	if (!(ss = AllocMem(sizeof(struct SignalSemaphore), MEMF_PUBLIC | MEMF_CLEAR)))
 		Cleanexit("An error occurred allocating semaphore memory");
 
-   SumLibrary( (struct Library *) IO->io_Device) ; 
+   SumLibrary( (struct Library *) IO->io_Device) ;
 
    InitSemaphore(ss) ;
 
    oldbeginio = SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)mybeginio) ;
 
 	bprintf("[Cache installed successfully]\n");
-	InfoServer(infoport); 
+	InfoServer(infoport);
 
    ObtainSemaphore(ss) ;
    SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)oldbeginio) ;
@@ -597,7 +597,7 @@ char programname[40];
 
 void Cleanexit(char *errormsg)
 {
-	if (errormsg) 
+	if (errormsg)
 		bprintf("HCACHE ERROR: %s\n", errormsg);
 
 	Cleanup();
@@ -609,7 +609,7 @@ void Cleanexit(char *errormsg)
 }
 
 /*
-	Clean up global allocations 
+	Clean up global allocations
 */
 
 void Cleanup(void)
@@ -644,6 +644,6 @@ int line, set;
 		FreeMem(globbuffer, linesize * ITEM_SIZE);
 	if (cache)
 		FreeMem(cache, sizeof(struct cache_line) * sets * lines);
-   if (_Backstdout) 
+   if (_Backstdout)
 		Close(_Backstdout);
 }

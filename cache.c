@@ -21,6 +21,7 @@
 #include <libraries/dos.h>
 #include <proto/dos.h>
 #include <proto/exec.h>
+#include <clib/alib_protos.h>
 #include "cache.h"
 
 
@@ -57,9 +58,8 @@ struct SignalSemaphore 	*ss		= NULL;	/* To force single threading	 		*/
 														/* through the code responsible	 	*/
 														/* for updating the cache	 			*/
 
-														/* Pointer to the old vector			*/  
-void (*__asm oldbeginio)(register __a1 struct IOStdReq *,
-								 register __a6 struct Device *dev);
+														/* Pointer to the old vector			*/
+void (*oldbeginio)(struct IOStdReq *req asm("a1"), struct Device *dev asm("a6"));
 
 
 ULONG counter;
@@ -83,13 +83,13 @@ IMPORT ULONG sectormask;
 IMPORT ULONG linemask;
 
 IMPORT BOOL  cli;
-IMPORT ULONG _Backstdout;
+extern BPTR _Backstdout;
 IMPORT BOOL  DiskStatus;
 
 struct cache_line *cache = NULL;
 
 /*
- * A buffer for scsidisk.device to go through.  
+ * A buffer for scsidisk.device to go through.
  */
 char *globbuffer = NULL;
 
@@ -105,7 +105,7 @@ int status;
 
 	ObtainSemaphore(ss);
 
-	port = CreatePort(NULL, NULL) ;
+	port = CreatePort(NULL, (ULONG)NULL) ;
 	if (!port) {
 		ReleaseSemaphore(ss) ;
 		return DISK_OUT ;				/* Can't check... assume still in */
@@ -122,12 +122,12 @@ int status;
 	return status;
 }
 
-/* 
+/*
  * This functions checks the cache. If the sector is there, it returns
  * the buffer, otherwise it returns NULL.
  * Go ahead, expand this by hand, I dare you...
  */
-char *FindCache(ULONG *s,int set) 
+char *FindCache(ULONG *s,int set)
 {
    return & (cache[set * lines + LINE(*s)].buffer[OFFSET(*s) * sectorsize ] ) ;
 }
@@ -135,7 +135,7 @@ char *FindCache(ULONG *s,int set)
 /*
  * Scan for sector, and return the set it resides in.
  */
-int FindEntry(ULONG *s) 
+int FindEntry(ULONG *s)
 {
 int set;
 struct cache_line *thecache = cache + LINE(*s);
@@ -151,7 +151,7 @@ struct cache_line *thecache = cache + LINE(*s);
          break ;
 
 
-/*   for (set = 0; set < sets; set++) 
+/*   for (set = 0; set < sets; set++)
       if (cache[set * lines + LINE(*s)].valid) {
          if (cache[set * lines + LINE(*s)].key == KEY(*s)) {
             cache[set * lines + LINE(*s)].age = counter ++ ;
@@ -171,7 +171,7 @@ struct cache_line *thecache = cache + LINE(*s);
  * can't fill it, remember to clear it!
  */
 
- int AllocCache(ULONG *s) 
+ int AllocCache(ULONG *s)
 {
 int set ;
 int oldest ;
@@ -186,21 +186,21 @@ int age ;
    oldest = 0 ;
    found  = 0 ;
 
-   for (set = 0; set < sets; set++) 
+   for (set = 0; set < sets; set++)
       if (cache[set * lines + line_s].valid) {
          if (cache[set * lines + line_s].key != key_s) {
             /*
-             * This 'age' calculation is complicated since normally, 
+             * This 'age' calculation is complicated since normally,
              * AGE = COUNTER - CACHE.AGE, however, if counter has
              * wrapped to zero, such evaluation evaluates ages of < 0 and
              * these entries will never be reselected for reuse.
              *
              * If counter wraps to zero, then CACHE.AGE is generally larger
-             * than COUNTER, so we evaluate age as the total of MAXINT-AGE 
+             * than COUNTER, so we evaluate age as the total of MAXINT-AGE
              * plus the current value of the counter. IE, how much it took to
              * wrap and reach the current position.
              *
-             * Hence, 
+             * Hence,
              * AGE = ~0 - CACHE.AGE + COUNTER
              */
             age = cache[set * lines + line_s].age ;
@@ -241,7 +241,7 @@ int age ;
     * If STILL no buffer, return failure. Otherwise set the VALID flag.
     */
 
-   if (cache[set * lines + line_s].buffer ) 
+   if (cache[set * lines + line_s].buffer )
       cache[set * lines + line_s].valid = 1 ;
    else {
       cache[set * lines + line_s].valid = 0 ;         /* Allocation failed */
@@ -255,7 +255,7 @@ int age ;
  * Allocate a line of cache and read it from disk.
  */
 
-int ReadCache(ULONG *s) 
+int ReadCache(ULONG *s)
 {
 struct MsgPort *port;
 char *dest;
@@ -263,7 +263,7 @@ int  set;
 
    ObtainSemaphore(ss);
 
-   port = CreatePort(NULL, NULL) ;
+   port = CreatePort(NULL, (ULONG)NULL) ;
 
    if (!port) {
       ReleaseSemaphore(ss) ;
@@ -305,7 +305,7 @@ int  set;
    return 0 ;
 }
 
-int ReadBufferToCache(int linestart,int unread,char *buffer) 
+int ReadBufferToCache(int linestart,int unread,char *buffer)
 {
 ULONG s ;
 struct MsgPort *port ;
@@ -314,7 +314,7 @@ int set ;
    ObtainSemaphore(ss);
    s = linestart ;
 
-   port = CreatePort(NULL, NULL) ;
+   port = CreatePort(NULL, (ULONG)NULL) ;
 
    if (!port) {
       ReleaseSemaphore(ss) ;
@@ -367,7 +367,7 @@ int set ;
  * is in the cache.
  */
 
-int NextEntry(ULONG *s, int set) 
+int NextEntry(ULONG *s, int set)
 {
 int line ;
 
@@ -385,12 +385,12 @@ int line ;
  * Search for sector, and mark it invalid.
  */
 
-void ClearEntry(ULONG *s,int set) 
+void ClearEntry(ULONG *s,int set)
 {
    cache[set * lines + LINE(*s)].valid = 0 ;
 }
 
-int CacheUpdate(ULONG *s, int seccount, char *buffer) 
+int CacheUpdate(ULONG *s, int seccount, char *buffer)
 {
 int set ;
 
@@ -414,8 +414,7 @@ int set ;
 
 char outstr[255];
 
-void __saveds __asm mybeginio(register __a1 struct IOStdReq *req,
-                              register __a6 struct Device *dev) 
+void __saveds mybeginio(struct IOStdReq *req asm("a1"), struct Device *dev asm("a6"))
 {
 ULONG s;
 int   set;
@@ -449,10 +448,10 @@ ULONG linestart;
 	            source = NULL ;
 	            }
 	         else {
-	            source = FindCache(&s,set) ; 
+	            source = FindCache(&s,set) ;
 	            }
 
-				if (source) 
+				if (source)
 					readhits++;
 	
 	         /*
@@ -465,12 +464,12 @@ ULONG linestart;
 	
 	            secnum -- ;
 	            if (secnum) {
-	               set = NextEntry(&s, set) ; 
+	               set = NextEntry(&s, set) ;
 	               if (set < 0) {
 	                  source = NULL ;
 	                  }
 	               else {
-	                  source = FindCache(&s,set) ; 
+	                  source = FindCache(&s,set) ;
 	                  }
 	               }
 	            }
@@ -497,7 +496,7 @@ ULONG linestart;
 	             */
 	            unread = 0 ;
 	
-	            linestart = s ; 
+	            linestart = s ;
 	
 	            /*
 	             * Scan counting sectors that need reading.
@@ -562,13 +561,13 @@ ULONG linestart;
 ** failed allocation request is too damned difficult to deal with in midstream.
 */
 
-int GrabCacheMem(void) 
+int GrabCacheMem(void)
 {
 int set, line;
 
-   for (line = 0; line < lines; line++) 
+   for (line = 0; line < lines; line++)
 		for (set=0; set<sets; set++)
-		   if (! cache[set * lines + line].buffer ) 
+		   if (! cache[set * lines + line].buffer )
       		if (cache[set * lines + line].buffer = AllocMem(linesize * sectorsize, MEMF_PUBLIC)) {
 					allocnum++;
 			      cache[set * lines + line].valid = 0 ;  /* Allocation OK */
@@ -583,7 +582,7 @@ int set, line;
 ** unit it builds two message port names, one for the device control and
 ** one for the local info server.  If the user has specified the quit
 ** flag on the command line, a message with the INFO_KILL command is sent
-** to the info server and then the code is exited.  
+** to the info server and then the code is exited.
 **
 ** If this is not the kill request, but rather the actual invocation of the
 ** cache, the two ports are created.  If the device port already exists,
@@ -594,15 +593,17 @@ int set, line;
 ** wait for commands, such as KILL or STATS, and services those requests.
 */
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[])
 {
 char portname[40];
 char infoportname[40];
 char programname[40];
 
 	cli = (argc != 0);
+	if (cli)
+		_Backstdout = Output();
 
-	if (cli) 
+	if (cli)
 		if (parse_args(argc, argv))
 			Cleanexit(NULL);
 
@@ -622,7 +623,7 @@ char programname[40];
 		if (port_to_kill = FindPort(infoportname)) {
 			struct MsgPort *replyport;
 
-			if (!(replyport = CreatePort(NULL, NULL)))
+			if (!(replyport = CreatePort(NULL, (ULONG)NULL)))
 				Cleanexit("Error creating temporary port");
 			else {
 				struct INFOMessage msg;
@@ -636,7 +637,7 @@ char programname[40];
 				DeletePort(replyport);		/* Remove the reply port		*/
 				Cleanexit(NULL);				/* Exit this thread				*/
 			}
-		} else 
+		} else
 			Cleanexit("Problem: Can't find that cache's info port!");
 	}
 
@@ -645,7 +646,7 @@ char programname[40];
 		if (port_to_send = FindPort(infoportname)) {
 			struct MsgPort *replyport;
 
-			if (!(replyport = CreatePort(NULL, NULL)))
+			if (!(replyport = CreatePort(NULL, (ULONG)NULL)))
 				Cleanexit("Error creating temporary port");
 			else {
 				struct INFOMessage msg;
@@ -665,14 +666,14 @@ char programname[40];
 				bprintf("Prefetch    : %d\n", msg.INFO_Linesize);
 				bprintf("Lines       : %d\n", msg.INFO_Lines);
 				bprintf("Sets        : %d\n", msg.INFO_Sets);
-				bprintf("Cache Size  : %dK\n", (msg.INFO_Sectorsize * 
-														  msg.INFO_Linesize * 
+				bprintf("Cache Size  : %dK\n", (msg.INFO_Sectorsize *
+														  msg.INFO_Linesize *
 														  msg.INFO_Sets *
 														  msg.INFO_Lines / 1024));
 
 				Cleanexit(NULL);				/* Exit this thread				*/
 			}
-		} else 
+		} else
 			Cleanexit("Problem: Can't find that cache's info port!");
 	}
 
@@ -685,7 +686,7 @@ char programname[40];
 	if (!(globbuffer = AllocMem(linesize * sectorsize, MEMF_CHIP | MEMF_CLEAR)))
 		Cleanexit("Error allocating memory for global buffer.");
 
-	if (FindPort(portname)) 
+	if (FindPort(portname))
 		Cleanexit("HyperCache is already active on this device.");
 
 	if (!(devport = CreatePort(portname, 0)))
@@ -705,20 +706,20 @@ char programname[40];
 	if (!(ss = AllocMem(sizeof(struct SignalSemaphore), MEMF_PUBLIC | MEMF_CLEAR)))
 		Cleanexit("An error occurred allocating semaphore memory");
 
-   SumLibrary( (struct Library *) IO->io_Device) ; 
+   SumLibrary( (struct Library *) IO->io_Device) ;
 
    InitSemaphore(ss) ;
 
 	Disable();
-   oldbeginio = SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)mybeginio) ;
+   oldbeginio = (void (*)(struct IOStdReq *, struct Device *))SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(APTR)mybeginio) ;
 	Enable();
 
 	bprintf("[Cache installed successfully]\n");
-	InfoServer(infoport); 
+	InfoServer(infoport);
 
    ObtainSemaphore(ss) ;
 	Disable();
-   SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(__fptr)oldbeginio) ;
+   SetFunction((struct Library *)IO->io_Device,DEV_BEGINIO,(APTR)oldbeginio) ;
 	Enable();
    ReleaseSemaphore(ss) ;
 
@@ -735,7 +736,7 @@ char programname[40];
 
 void Cleanexit(char *errormsg)
 {
-	if (errormsg) 
+	if (errormsg)
 		bprintf("HCACHE ERROR: %s\n", errormsg);
 
 	Cleanup();
@@ -747,7 +748,7 @@ void Cleanexit(char *errormsg)
 }
 
 /*
-	Clean up global allocations 
+	Clean up global allocations
 */
 
 void Cleanup(void)
@@ -782,6 +783,6 @@ int line, set;
 		FreeMem(globbuffer, linesize * sectorsize);
 	if (cache)
 		FreeMem(cache, sizeof(struct cache_line) * sets * lines);
-   if (_Backstdout) 
+   if (_Backstdout)
 		Close(_Backstdout);
 }

@@ -35,6 +35,7 @@
 
 #define KEY(sector) 		(sector >> (itembits + linebits))
 #define LINE(sector) 	((sector & linemask) >> itembits)
+#undef OFFSET
 #define OFFSET(sector)	(sector & sectormask)
 
 struct cache_line {

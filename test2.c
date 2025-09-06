@@ -9,9 +9,9 @@
 
 unsigned int bit_table[16] = { 1, 		2, 		4, 		8,	 	
 										 16, 		32,   	64,  		128,  	
-										 512,		1024,		2048, 	4096,   
-										 8192,   16384,   32768,	65536 
-									  }; 
+										 512,		1024,		2048, 	4096,
+										 8192,   16384,   32768,	65536
+									  };
 
 
 struct bitaddress {
@@ -22,7 +22,7 @@ struct bitaddress {
 
 union sector {
    unsigned int sector ;
-   struct bitaddress s ; 
+   struct bitaddress s ;
 };
 
 #define KEY(sector) 		(sector >> (itembits + linebits))
@@ -65,7 +65,7 @@ unsigned int linebits, itembits;
 	*/
 
 	linemask = 1;
-	for (a=0; a<linebits-1; a++) 
+	for (a=0; a<linebits-1; a++)
 		linemask = (linemask << 1) + 1;		
 	linemask <<= itembits;
 

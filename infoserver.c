@@ -61,7 +61,7 @@ struct MsgPort     *timeport;
 					int line;
 					int set;
 					bprintf("\nClearing cache...\n");	
-				   for (line = 0; line < lines; line++) 
+				   for (line = 0; line < lines; line++)
 						for (set=0; set<sets; set++)
 					      cache[set * lines + line].valid = 0 ;  /* Invalidate Cache */
 				}
@@ -101,7 +101,7 @@ struct MsgPort     *timeport;
 				; 	/* Clean up any other pending messages */
          ABORT = TRUE;
 		}
-  
+
 		if (ABORT) {
 			while(timepending--) { 	/* Wait for outstanding timer messages */
 				WaitPort(timeport);

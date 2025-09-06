@@ -25,14 +25,14 @@
 #define BTOCSTR(bstr)	((UBYTE *)((UBYTE *)(BADDR(bstr)) + 1))
 char conv_name[40];				/* Used for BCPL to C name conversion		*/
 
- 
+
 UBYTE *ver = "\0$VER: HyperCache version 1.0";
 
 ULONG bit_table[16] = { 1, 		2, 		4, 		8,	 	
 							   16, 		32,   	64,  		128,  	
-							   512,		1024,		2048, 	4096,   
-							   8192,    16384,   32768,	65536 
-							 }; 
+							   512,		1024,		2048, 	4096,
+							   8192,    16384,   32768,	65536
+							 };
 
 
 ULONG sectorsize	= DEFLT_ITEM_SIZE;
@@ -53,8 +53,8 @@ ULONG linebits;
 void usage(void)
 {
 	bprintf("\n%s%s%s%s%s%s%s%s%s\n",
-		BOLD, 
-		"HyperCache v1.0     (c)1992 David Plummer\n", 
+		BOLD,
+		"HyperCache v1.0     (c)1992 David Plummer\n",
 		NORMAL,
 		"Usage   : HyperCache -v <volume> | -d <device> -u <unit> [options]\n",
 		"Options : -p <prefetch_sectors>\n",
@@ -118,7 +118,7 @@ ULONG a;
 	}
 
 	if (linesize > MAX_LINE_SIZE  ||  linesize < MIN_LINE_SIZE) {
-		bprintf("Prefetch must be in the range %d to %d.\n", 
+		bprintf("Prefetch must be in the range %d to %d.\n",
 			MIN_LINE_SIZE, MAX_LINE_SIZE);
 		Cleanexit(NULL);
 	}
@@ -165,7 +165,7 @@ ULONG a;
 	*/
 
 	linemask = 1;
-	for (a=0; a<linebits-1; a++) 
+	for (a=0; a<linebits-1; a++)
 		linemask = (linemask << 1) + 1;		
 	linemask <<= itembits;
 
@@ -185,7 +185,7 @@ ULONG a;
 			volume[strlen(volume) - 1] = '\0';
 
 
-	if ((volume && device) || (volume && unit)) 
+	if ((volume && device) || (volume && unit))
 		bprintf("%s%s",
 			"You may not specify both a volume name and a device/unit combination\n",
 			"at the same time: they are mutually exclusive.\n");
@@ -195,7 +195,7 @@ ULONG a;
 	*/
 
 	if (volume) {
-		struct FileSysStartupMsg *fssm_msg; 
+		struct FileSysStartupMsg *fssm_msg;
 		struct DeviceNode 		 *devlist;
 		int l;
 
@@ -209,7 +209,7 @@ ULONG a;
       	if (devlist->dn_Type == DLT_DEVICE) {
 				char *name2 = (char *)BADDR(devlist->dn_Name);
 				int l2 = *name2;
-				if (l == l2 && strnicmp(volume, name2 + 1, l) == 0) break;
+				if (l == l2 && strncasecmp(volume, name2 + 1, l) == 0) break;
 			}
    	Permit();
 
@@ -219,7 +219,7 @@ ULONG a;
 
 		if (!devlist) {
 			Cleanexit("No device could be associated with your volume name.");
-		} 
+		}
 
 		fssm_msg = (struct FileSysStartupMsg *)BADDR(devlist->dn_Startup);
 		device 	= strcpy(conv_name, BTOCSTR(fssm_msg->fssm_Device));
@@ -234,14 +234,14 @@ ULONG a;
 		bprintf("Prefetch : %d\n", linesize);
 		bprintf("Sets     : %d\n", sets);
 		bprintf("Lines    : %d\n", lines);
-		bprintf("Size     : %dK\n", (sectorsize * linesize * sets * lines)/1024); 
+		bprintf("Size     : %dK\n", (sectorsize * linesize * sets * lines)/1024);
 
 		if (!strcmp(device, "trackdisk.device")) {
 			bprintf("Warning: Diskchange code is disabled in this version.  Although\n");
 			bprintf("         it will likely function anyway, I suggest restricting\n");
 			bprintf("         yourself to non-removable media, or at least to not\n");
 			bprintf("         swapping disks while HyperCache is running. Sorry...\n");
-		} 
+		}
 
 	} else if (cacheinfo) {
 		bprintf("[Signalling cache to provide statistics...]\n");
